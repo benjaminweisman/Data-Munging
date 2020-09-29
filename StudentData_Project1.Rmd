@@ -1,0 +1,62 @@
+---
+title: "Student Data Project"
+author: "Kalani Stanton, Adam Lashley, Benjamin Weissman, Sara Haman"
+date: "9/29/2020"
+output: html_document
+---
+
+```{r}
+library(plyr)
+library(tidyverse)
+library(httr)
+library(jsonlite)
+```
+
+If data directory not yet created in your working directory
+```{r}
+
+```
+
+```{r}
+proj.dir <- getwd()
+#dir.create("Proj1Data")
+data.dir <- paste0(proj.dir, "/Proj1Data")
+```
+
+```{r}
+APIKey = "FELgrGb47PaevTWxqZTt6etFaQVnDbKpcJLaPL6a"
+res = GET(paste0("https://api.data.gov/ed/collegescorecard/v1/schools?api_key=", APIKey))
+```
+
+```{r}
+data = fromJSON(rawToChar(res$content))
+```
+
+```{r}
+#install.packages("listviewer")
+library(listviewer)
+year = data.frame()
+unnested = data.frame()
+for (yr in colnames(data$results)) {
+  for (df in data$results[,yr]){
+    for (c in ncol(row)) {
+      unstd = unnest_wider(df, col = c)
+      unnested <- rbind.fill(unnested, unstd)
+      (unnested)
+    }
+    d = rbind.fill(year,unnested)
+  }
+}
+#oh <- laply(data$results, function(x) {assign(names(x), x)})
+#names(data$results)
+
+#ata$results
+id_data <- data$results[c("school", "id", "location", "ope6_id", "ope8_id")]
+
+```
+
+
+```{r}
+ddply(data, function (x))
+```
+
