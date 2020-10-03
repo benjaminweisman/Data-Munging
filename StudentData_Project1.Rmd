@@ -8,14 +8,15 @@ output: html_document
 ```{r}
 library(plyr)
 library(tidyverse)
+library(Hmisc)
 library(httr)
 library(jsonlite)
+library(treemap)
+
+`%notin%` <- Negate(`%in%`)
 ```
 
 If data directory not yet created in your working directory
-```{r}
-
-```
 
 ```{r}
 proj.dir <- getwd()
@@ -32,31 +33,51 @@ res = GET(paste0("https://api.data.gov/ed/collegescorecard/v1/schools?api_key=",
 data = fromJSON(rawToChar(res$content))
 ```
 
-```{r}
-#install.packages("listviewer")
-library(listviewer)
-year = data.frame()
-unnested = data.frame()
-for (yr in colnames(data$results)) {
-  for (df in data$results[,yr]){
-    for (c in ncol(row)) {
-      unstd = unnest_wider(df, col = c)
-      unnested <- rbind.fill(unnested, unstd)
-      (unnested)
-    }
-    d = rbind.fill(year,unnested)
-  }
-}
-#oh <- laply(data$results, function(x) {assign(names(x), x)})
-#names(data$results)
+I originally intended on having this be the solution, but the fact that the names of the listed data frames are numeric. This is likely to cause problems later, but looking at the `names()` below, we can see other opportunities for exploring the data. 
 
-#ata$results
+```{r}
+#list2env(data$results, envir = .GlobalEnv)
+
+names(data$results)
+```
+
+Not all of the listed data frames are named after years, and likely contain different data than the others. Thus, prior to extracting year data frames with a character alteration (to make them non-numeric), I'm going to first extract the non-year data frames.
+
+```{r}
+#list2env(data$results, envir = .GlobalEnv)
+
+names(data$results$location)
+```
+
+Additionally, not all of the listed data frames are named after years, and likely contain different data than the others. Thus, prior to extracting year data frames with a character alteration (to make them non-numeric), I'm going to first extract the non-year data frames.
+
+```{r}
 id_data <- data$results[c("school", "id", "location", "ope6_id", "ope8_id")]
 
-```
+yearsLi<- data$results[names(data$results) %notin% c("school", "id", "location", "ope6_id", "ope8_id")]
 
+names(yearsLi) <- paste0("yr", names(yearsLi))
+
+list2env(yearsLi, envir = .GlobalEnv)
+```
+Using these discrete data frames helped us understand what was happening at different levels of the data
+```{r}
+names(yr2012)
+contents(id_data$school)
+contents(yr2012$academics$program$bachelors)
+yr2012$academics$program$bachelors
+length(id_data$ope8_id)
+```
+This ultimately clarified nothing and left me more confused than when I began exploring. So, I turned to google to find some help with navigating this data and stumbled upon a package called {rscorecard}.
+
+
+## On the shoulders of giants
+
+The {rscorecard} package is a wrapper for the College Scorecard API that takes full advantage of this complex data structure using tidyverse integration. Using modified {dplyr} functions and pipe operators `%>%` from {magrittr}, the {rscorecard} provides a simple solution for querying data directly from the API.
 
 ```{r}
-ddply(data, function (x))
+#install.packages("rscorecard")
+library(rscorecard)
 ```
 
+The package works by quer
