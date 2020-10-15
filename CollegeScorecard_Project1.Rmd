@@ -1,0 +1,144 @@
+---
+title: "College Scorecard Project"
+author: "Kalani Stanton, Adam Lashley, Benjamin Weissman, Sara Haman"
+date: "9/29/2020"
+output: html_document
+---
+
+```{r}
+library(plyr)
+library(tidyverse)
+library(Hmisc)
+library(httr)
+library(jsonlite)
+#install.packages("tmap")
+library(tmap)
+library(leaflet)
+library(treemap)
+
+`%notin%` <- Negate(`%in%`)
+```
+
+If data directory not yet created in your working directory
+
+```{r}
+proj.dir <- getwd()
+#dir.create("Proj1Data")
+data.dir <- paste0(proj.dir, "/Proj1Data")
+```
+
+```{r}
+APIKey = "FELgrGb47PaevTWxqZTt6etFaQVnDbKpcJLaPL6a"
+res = GET(paste0("https://api.data.gov/ed/collegescorecard/v1/schools?api_key=", APIKey))
+```
+
+```{r}
+data = fromJSON(rawToChar(res$content))
+```
+
+I originally intended on having this be the solution, but the fact that the names of the listed data frames are numeric. This is likely to cause problems later, but looking at the `names()` below, we can see other opportunities for exploring the data. 
+
+```{r}
+#list2env(data$results, envir = .GlobalEnv)
+
+names(data$results)
+```
+
+Not all of the listed data frames are named after years, and likely contain different data than the others. Thus, prior to extracting year data frames with a character alteration (to make them non-numeric), I'm going to first extract the non-year data frames.
+
+```{r}
+#list2env(data$results, envir = .GlobalEnv)
+
+names(data$results$location)
+```
+
+Additionally, not all of the listed data frames are named after years, and likely contain different data than the others. Thus, prior to extracting year data frames with a character alteration (to make them non-numeric), I'm going to first extract the non-year data frames.
+
+```{r}
+id_data <- data$results[c("school", "id", "location", "ope6_id", "ope8_id")]
+
+yearsLi<- data$results[names(data$results) %notin% c("school", "id", "location", "ope6_id", "ope8_id")]
+
+names(yearsLi) <- paste0("yr", names(yearsLi))
+
+list2env(yearsLi, envir = .GlobalEnv)
+```
+Using these discrete data frames helped us understand what was happening at different levels of the data
+```{r}
+names(yr2012)
+contents(id_data$school)
+contents(yr2012$academics$program$bachelors)
+yr2012$academics$program$bachelors
+length(id_data$ope8_id)
+```
+
+This ultimately clarified nothing and left me more confused than when I began exploring. So, I turned to google to find some help with navigating this data and stumbled upon a package called {rscorecard}.
+
+
+## On the shoulders of giants
+
+The {rscorecard} package is a wrapper for the College Scorecard API that takes full advantage of this complex data structure using tidyverse integration. Using modified {dplyr} functions and pipe operators `%>%` from {magrittr}, the {rscorecard} provides a simple solution for querying data directly from the API.
+
+```{r}
+#install.packages("rscorecard")
+library(rscorecard)
+```
+
+The package works by querying the api directly, and allowing the information passed into the query to condition the extraction of the requested data.
+
+```{r}
+sc_key(APIKey)
+```
+
+```{r}
+Finance<- sc_init() %>% 
+    #sc_filter(region == 2, ccbasic == c(21,22,23), locale == 41:43) %>% 
+    sc_select(control, instnm, stabbr, npt4_pub, npt4_priv, costt4_a, grad_debt_mdn, avgfacsal) %>% 
+    sc_year("latest") %>% 
+    sc_get()
+```
+
+```{r}
+contents(FinAid)
+```
+
+```{r}
+#install.packages("maps")
+library(maps)
+library(usmap)
+debtMedian <- Finance %>%
+  group_by(stabbr) %>%
+  mutate(avgDebt = mean(grad_debt_mdn, na.rm = TRUE)) %>%
+  select(stabbr, avgDebt)%>%
+  ungroup()
+
+debtMedian <- as.data.frame(debtMedian)
+
+colnames(debtMedian) <- c("state", "avgDebt")
+debtMedian[1]
+
+plot_usmap(data =debtMedian, values = "avgDebt", color = "black") + 
+  scale_fill_continuous(
+    low = "white", high = "red", name = "Average Debt Median", label = scales::comma
+  ) + theme(legend.position = "right")
+```
+
+```{r}
+FacSalary <- Finance %>%
+  group_by(stabbr) %>%
+  mutate(avgSal = mean(avgfacsal, na.rm = TRUE)) %>%
+  select(stabbr, avgSal)%>%
+  ungroup()
+
+FacSalary <- as.data.frame(FacSalary)
+
+colnames(FacSalary) <- c("state", "avgSal")
+
+plot_usmap(data =FacSalary, values = "avgSal", color = "black") + 
+  scale_fill_continuous(
+    low = "white", high = "blue", name = "Average Faculty Salary", label = scales::comma
+  ) + theme(legend.position = "right")
+```
+
+
+
